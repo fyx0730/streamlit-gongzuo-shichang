@@ -1,76 +1,59 @@
-# app.py
+import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-import streamlit as st
+import os
 
-# ========== 📁 数据读取与预处理 ==========
-file_path = '/Users/elite/Downloads/各校区每日图形化编程作品使用时长_全部数据_20250521184525.xlsx'
-df = pd.read_excel(file_path)
-df['日期'] = pd.to_datetime(df['日期'], errors='coerce')
-df = df.dropna(subset=['作品使用时长（分钟）'])
+st.set_page_config(page_title="图形化编程作品分析", layout="wide")
+st.title("📊 图形化编程作品使用时长分析")
 
-# 提取干净的作品名称
-def extract_work_name(name):
-    name = str(name)
-    parts = name.split('_', 1)
-    return parts[1] if len(parts) == 2 else name
+# 🗂 设置本地 Excel 文件路径（相对路径）
+file_path = os.path.join("data", "usage_data.xlsx")
 
-df['作品名称提取'] = df['图形化编程作品名称'].apply(extract_work_name)
+# 加载数据
+try:
+    df = pd.read_excel(file_path)
 
-# ========== 🎛 Streamlit 页面结构 ==========
-st.title("🎯 图形化编程作品使用分析")
-st.markdown("按作品名称查看总使用时长及各门店分布")
+    df['日期'] = pd.to_datetime(df['日期'], errors='coerce')
+    df = df.dropna(subset=['作品使用时长（分钟）'])
 
-# ========== 🔢 生成作品下拉选项 ==========
-work_time_summary = (
-    df.groupby('作品名称提取')['作品使用时长（分钟）']
-    .sum()
-    .sort_values(ascending=False)
-)
-works = work_time_summary.index.tolist()
-
-selected = st.selectbox("选择作品:", options=[''] + works)
-
-if selected:
-    filtered = df[df['作品名称提取'] == selected]
-    total = filtered['作品使用时长（分钟）'].sum()
-
-    # 总时长图
-    total_fig = go.Figure()
-    total_fig.add_bar(
-        x=[selected],
-        y=[total],
-        text=[f'{total:.0f} 分钟'],
-        textposition='outside'
-    )
-    total_fig.update_layout(
-        title=f'📊 `{selected}` 总使用时长',
-        xaxis_title='作品名称',
-        yaxis_title='总使用时长（分钟）',
-        yaxis_range=[0, total * 1.2],
-        template='plotly_white'
-    )
-    st.plotly_chart(total_fig, use_container_width=True)
-
-    # 各门店图
-    store_summary = (
-        filtered.groupby('所属门店')['作品使用时长（分钟）']
-        .sum()
-        .sort_values(ascending=False)
+    df['作品名称提取'] = df['图形化编程作品名称'].apply(
+        lambda name: str(name).split('_', 1)[1] if '_' in str(name) else name
     )
 
-    store_fig = go.Figure()
-    store_fig.add_bar(
-        x=store_summary.index.tolist(),
-        y=store_summary.values.tolist(),
-        text=[f'{v:.0f}' for v in store_summary.values],
-        textposition='outside'
-    )
-    store_fig.update_layout(
-        title=f'🏫 `{selected}` 各门店使用时长分布',
-        xaxis_title='所属门店',
-        yaxis_title='使用时长（分钟）',
-        yaxis_range=[0, store_summary.max() * 1.2],
-        template='plotly_white'
-    )
-    st.plotly_chart(store_fig, use_container_width=True)
+    work_time_summary = df.groupby('作品名称提取')['作品使用时长（分钟）'].sum().sort_values(ascending=False)
+    works = work_time_summary.index.tolist()
+
+    selected = st.selectbox("选择作品：", options=works)
+
+    if selected:
+        filtered = df[df['作品名称提取'] == selected]
+        total = filtered['作品使用时长（分钟）'].sum()
+
+        # 总时长图
+        total_fig = go.Figure()
+        total_fig.add_bar(
+            x=[selected],
+            y=[total],
+            text=[f"{total:.0f} 分钟"],
+            textposition='outside'
+        )
+        total_fig.update_layout(title=f"📊 `{selected}` 总使用时长", yaxis_title="分钟")
+
+        # 门店分布图
+        store_summary = filtered.groupby('所属门店')['作品使用时长（分钟）'].sum().sort_values(ascending=False)
+        store_fig = go.Figure()
+        store_fig.add_bar(
+            x=store_summary.index,
+            y=store_summary.values,
+            text=[f"{v:.0f}" for v in store_summary.values],
+            textposition='outside'
+        )
+        store_fig.update_layout(title=f"🏫 `{selected}` 各门店使用时长分布", yaxis_title="分钟")
+
+        st.plotly_chart(total_fig, use_container_width=True)
+        st.plotly_chart(store_fig, use_container_width=True)
+
+except FileNotFoundError:
+    st.error("❌ 没有找到 Excel 文件。请确保文件存在于 `data/usage_data.xlsx`。")
+except Exception as e:
+    st.error(f"❌ 数据加载失败：{e}")
